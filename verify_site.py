@@ -1,0 +1,53 @@
+from html.parser import HTMLParser
+from pathlib import Path
+
+
+class PageParser(HTMLParser):
+    VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+        self.ids: list[str] = []
+        self.text: list[str] = []
+        self.stack: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in self.VOID_TAGS:
+            self.stack.append(tag)
+        values = dict(attrs)
+        if values.get("href"):
+            self.links.append(values["href"] or "")
+        if values.get("id"):
+            self.ids.append(values["id"] or "")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.stack:
+            index = len(self.stack) - 1 - self.stack[::-1].index(tag)
+            del self.stack[index]
+
+    def handle_data(self, data: str) -> None:
+        self.text.append(data)
+
+
+root = Path(__file__).resolve().parent
+pages = [root / "index.html", root / "terms-of-service.html", root / "advertising-policy.html"]
+expected_internal = {page.name for page in pages} | {"styles.css", "app_logo.png"}
+
+for page in pages:
+    parser = PageParser()
+    parser.feed(page.read_text(encoding="utf-8"))
+    parser.close()
+    assert not parser.stack, f"Unclosed tags in {page.name}: {parser.stack}"
+    assert len(parser.ids) == len(set(parser.ids)), f"Duplicate id in {page.name}"
+    content = " ".join(parser.text)
+    for required in ("English", "Türkçe", "PerfectSky Studios", "perfectskystudios@gmail.com"):
+        assert required in content, f"Missing {required!r} in {page.name}"
+    for link in parser.links:
+        target = link.split("#", 1)[0]
+        if not target or "://" in target or target.startswith("mailto:"):
+            continue
+        assert target in expected_internal, f"Unexpected internal target {target!r} in {page.name}"
+        assert (root / target).is_file(), f"Missing internal target {target!r} in {page.name}"
+
+print("Legal site static verification: PASS (3 bilingual pages, links and contact details)")
