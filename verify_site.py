@@ -47,7 +47,7 @@ for page in pages:
     for required in ("English", "Türkçe", "PerfectSky Studios", "perfectskystudios@gmail.com"):
         assert required in content, f"Missing {required!r} in {page.name}"
     for link in parser.links:
-        target = link.split("#", 1)[0]
+        target = link.split("#", 1)[0].split("?", 1)[0]
         if not target or "://" in target or target.startswith("mailto:"):
             continue
         assert target in expected_internal, f"Unexpected internal target {target!r} in {page.name}"
