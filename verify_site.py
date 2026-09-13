@@ -8,6 +8,7 @@ class PageParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.links: list[str] = []
+        self.images: list[dict[str, str | None]] = []
         self.ids: list[str] = []
         self.text: list[str] = []
         self.stack: list[str] = []
@@ -20,6 +21,8 @@ class PageParser(HTMLParser):
             self.links.append(values["href"] or "")
         if values.get("id"):
             self.ids.append(values["id"] or "")
+        if tag == "img":
+            self.images.append(values)
 
     def handle_endtag(self, tag: str) -> None:
         if tag in self.stack:
@@ -32,7 +35,7 @@ class PageParser(HTMLParser):
 
 root = Path(__file__).resolve().parent
 pages = [root / "index.html", root / "terms-of-service.html", root / "advertising-policy.html"]
-expected_internal = {page.name for page in pages} | {"styles.css", "app_logo.png"}
+expected_internal = {page.name for page in pages} | {"styles.css", "app_logo.png", "studio_logo.jpg"}
 
 for page in pages:
     parser = PageParser()
@@ -50,8 +53,14 @@ for page in pages:
         assert target in expected_internal, f"Unexpected internal target {target!r} in {page.name}"
         assert (root / target).is_file(), f"Missing internal target {target!r} in {page.name}"
 
-    for retired in ("13–15", "16–17", "local age/country profile", "yerel yaş/ülke profili"):
+    for retired in ("13–15", "16–17", "local age/country profile", "yerel yaş/ülke profili", "App Hive", "AppHive"):
         assert retired not in content, f"Retired audience copy {retired!r} in {page.name}"
+    studio_images = [image for image in parser.images if image.get("src") == "studio_logo.jpg"]
+    assert len(studio_images) == 1, f"Missing or duplicate studio logo in {page.name}"
+    assert studio_images[0].get("alt") == "PerfectSky Studios", f"Missing studio logo description in {page.name}"
+    for image in parser.images:
+        source = image.get("src")
+        assert source in expected_internal and (root / source).is_file(), f"Missing image in {page.name}"
 
 for policy_name in ("index.html", "advertising-policy.html"):
     policy = (root / policy_name).read_text(encoding="utf-8")
